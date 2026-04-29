@@ -72,6 +72,7 @@ def generate_launch_description():
             executable='rviz2',
             name='rviz2',
             arguments=['-d', rviz_config_file],
-            output='screen'
+            output='screen',
+            additional_env={'LIBGL_ALWAYS_SOFTWARE': '1'}
         )
     ])

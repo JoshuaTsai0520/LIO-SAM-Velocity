@@ -1,5 +1,8 @@
 #include "utility.hpp"
 #include "lio_sam/msg/cloud_info.hpp"
+#include "lio_sam/distortion_function.hpp"
+
+#include <geometry_msgs/msg/twist_with_covariance_stamped.hpp>
 
 struct VelodynePointXYZIRT
 {
@@ -45,6 +48,8 @@ private:
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr subLaserCloud;
     rclcpp::CallbackGroup::SharedPtr callbackGroupLidar;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubLaserCloud;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubUndistortedCloud;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubFirstPoint;
 
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubExtractedCloud;
     rclcpp::Publisher<lio_sam::msg::CloudInfo>::SharedPtr pubLaserCloudInfo;
@@ -52,6 +57,7 @@ private:
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr subImu;
     rclcpp::CallbackGroup::SharedPtr callbackGroupImu;
     std::deque<sensor_msgs::msg::Imu> imuQueue;
+    rclcpp::Subscription<geometry_msgs::msg::TwistWithCovarianceStamped>::SharedPtr subTwist;
 
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr subOdom;
     rclcpp::CallbackGroup::SharedPtr callbackGroupOdom;
@@ -73,6 +79,7 @@ private:
     pcl::PointCloud<OusterPointXYZIRT>::Ptr tmpOusterCloudIn;
     pcl::PointCloud<PointType>::Ptr   fullCloud;
     pcl::PointCloud<PointType>::Ptr   extractedCloud;
+    pcl::PointCloud<PointType>::Ptr   firstPoint;
 
     int ringFlag = 0;
     int deskewFlag;
@@ -89,6 +96,8 @@ private:
     std_msgs::msg::Header cloudHeader;
 
     vector<int> columnIdnCountVec;
+
+    std::unique_ptr<DistortionFunctionBase> distortion_function_;
 
 
 public:
@@ -113,6 +122,10 @@ public:
             imuTopic, qos_imu,
             std::bind(&ImageProjection::imuHandler, this, std::placeholders::_1),
             imuOpt);
+        subTwist = create_subscription<geometry_msgs::msg::TwistWithCovarianceStamped>(
+            twistTopic, qos_imu,
+            std::bind(&ImageProjection::twistHandler, this, std::placeholders::_1),
+            imuOpt);
         subOdom = create_subscription<nav_msgs::msg::Odometry>(
             odomTopic + "_incremental", qos_imu,
             std::bind(&ImageProjection::odometryHandler, this, std::placeholders::_1),
@@ -126,6 +139,10 @@ public:
             "lio_sam/deskew/cloud_deskewed", 1);
         pubLaserCloudInfo = create_publisher<lio_sam::msg::CloudInfo>(
             "lio_sam/deskew/cloud_info", qos);
+        pubUndistortedCloud = create_publisher<sensor_msgs::msg::PointCloud2>(
+            "lio_sam/deskew/cloud_undistorted", 1);
+        pubFirstPoint = create_publisher<sensor_msgs::msg::PointCloud2>(
+            "lio_sam/deskew/first_point", 1);
 
         allocateMemory();
         resetParameters();
@@ -139,6 +156,7 @@ public:
         tmpOusterCloudIn.reset(new pcl::PointCloud<OusterPointXYZIRT>());
         fullCloud.reset(new pcl::PointCloud<PointType>());
         extractedCloud.reset(new pcl::PointCloud<PointType>());
+        firstPoint.reset(new pcl::PointCloud<PointType>());
 
         fullCloud->points.resize(N_SCAN*Horizon_SCAN);
 
@@ -155,6 +173,7 @@ public:
     {
         laserCloudIn->clear();
         extractedCloud->clear();
+        firstPoint->clear();
         // reset range matrix for range image projection
         rangeMat = cv::Mat(N_SCAN, Horizon_SCAN, CV_32F, cv::Scalar::all(FLT_MAX));
 
@@ -181,6 +200,11 @@ public:
         std::lock_guard<std::mutex> lock1(imuLock);
         imuQueue.push_back(thisImu);
 
+        if (enable_distortion_function && use_imu) {
+            initializeDistortionFunction();
+            distortion_function_->processIMUMessage(baselinkFrame, thisImu, use_velocity);
+        }
+
         // debug IMU data
         // cout << std::setprecision(6);
         // cout << "IMU acc: " << endl;
@@ -199,6 +223,15 @@ public:
         // cout << "roll: " << imuRoll << ", pitch: " << imuPitch << ", yaw: " << imuYaw << endl << endl;
     }
 
+    void twistHandler(
+        const geometry_msgs::msg::TwistWithCovarianceStamped::ConstSharedPtr twistMsg)
+    {
+        if (enable_distortion_function && use_velocity) {
+            initializeDistortionFunction();
+            distortion_function_->processTwistMessage(twistMsg);
+        }
+    }
+
     void odometryHandler(const nav_msgs::msg::Odometry::SharedPtr odometryMsg)
     {
         std::lock_guard<std::mutex> lock2(odoLock);
@@ -207,6 +240,22 @@ public:
 
     void cloudHandler(const sensor_msgs::msg::PointCloud2::SharedPtr laserCloudMsg)
     {
+        if (enable_distortion_function) {
+            initializeDistortionFunction();
+            distortion_function_->setPointCloudTransform(baselinkFrame, lidarFrame);
+            distortion_function_->initialize();
+            distortion_function_->undistortPointCloud(use_imu, *laserCloudMsg, firstPoint);
+
+            if (!firstPoint->empty()) {
+                sensor_msgs::msg::PointCloud2 firstPointMsg;
+                pcl::toROSMsg(*firstPoint, firstPointMsg);
+                firstPointMsg.header.stamp = laserCloudMsg->header.stamp;
+                firstPointMsg.header.frame_id = lidarFrame;
+                pubFirstPoint->publish(firstPointMsg);
+            }
+            pubUndistortedCloud->publish(*laserCloudMsg);
+        }
+
         if (!cachePointCloud(laserCloudMsg))
             return;
 
@@ -220,6 +269,13 @@ public:
         publishClouds();
 
         resetParameters();
+    }
+
+    void initializeDistortionFunction()
+    {
+        if (!distortion_function_) {
+            distortion_function_ = std::make_unique<DistortionFunction3D>(this);
+        }
     }
 
     bool cachePointCloud(const sensor_msgs::msg::PointCloud2::SharedPtr& laserCloudMsg)
@@ -609,7 +665,9 @@ public:
             if (rangeMat.at<float>(rowIdn, columnIdn) != FLT_MAX)
                 continue;
 
-            thisPoint = deskewPoint(&thisPoint, laserCloudIn->points[i].time);
+            if (!enable_distortion_function) {
+                thisPoint = deskewPoint(&thisPoint, laserCloudIn->points[i].time);
+            }
 
             rangeMat.at<float>(rowIdn, columnIdn) = range;
 
@@ -617,6 +675,7 @@ public:
             fullCloud->points[index] = thisPoint;
         }
     }
+    
 
     void cloudExtraction()
     {

@@ -5,6 +5,8 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
@@ -30,8 +32,10 @@ find_package(PCL REQUIRED)
 find_package(GTSAM REQUIRED)
 find_package(Eigen REQUIRED)
 find_package(OpenMP REQUIRED)
+find_package(Sophus REQUIRED)
 
 include_directories(
+  include
   include/lio_sam
 )
 
@@ -44,9 +48,9 @@ ament_target_dependencies(${PROJECT_NAME}_featureExtraction rclcpp rclpy std_msg
 rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
 target_link_libraries(${PROJECT_NAME}_featureExtraction "${cpp_typesupport_target}") 
 
-add_executable(${PROJECT_NAME}_imageProjection src/imageProjection.cpp)
+add_executable(${PROJECT_NAME}_imageProjection src/imageProjection.cpp src/distortion_function.cpp)
 ament_target_dependencies(${PROJECT_NAME}_imageProjection rclcpp rclpy std_msgs sensor_msgs geometry_msgs nav_msgs pcl_conversions pcl_msgs visualization_msgs tf2 tf2_ros tf2_eigen tf2_sensor_msgs tf2_geometry_msgs OpenCV PCL)
-target_link_libraries(${PROJECT_NAME}_imageProjection "${cpp_typesupport_target}") 
+target_link_libraries(${PROJECT_NAME}_imageProjection Sophus::Sophus "${cpp_typesupport_target}") 
 
 add_executable(${PROJECT_NAME}_imuPreintegration src/imuPreintegration.cpp)
 ament_target_dependencies(${PROJECT_NAME}_imuPreintegration rclcpp rclpy std_msgs sensor_msgs geometry_msgs nav_msgs pcl_conversions pcl_msgs visualization_msgs tf2 tf2_ros tf2_eigen tf2_sensor_msgs tf2_geometry_msgs OpenCV PCL GTSAM Eigen)
@@ -110,4 +114,3 @@ if(BUILD_TESTING)
 endif()
 
 ament_package()
-

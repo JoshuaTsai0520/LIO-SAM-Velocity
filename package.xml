@@ -5,10 +5,11 @@
   <version>1.0.0</version>
   <description>Lidar Odometry</description>
 
-  <maintainer email="shant@mit.edu">Tixiao Shan</maintainer>
+  <maintainer email="joshuat3@andrew.cmu.edu">Joshua Tsai</maintainer>
 
   <license>TODO</license>
 
+  <author>Joshua Tsai</author>
   <author>Tixiao Shan</author>
 
   <buildtool_depend>ament_cmake</buildtool_depend>

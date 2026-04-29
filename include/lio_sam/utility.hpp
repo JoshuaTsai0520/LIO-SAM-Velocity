@@ -72,6 +72,7 @@ public:
     //Topics
     string pointCloudTopic;
     string imuTopic;
+    string twistTopic;
     string odomTopic;
     string gpsTopic;
 
@@ -98,6 +99,11 @@ public:
     int downsampleRate;
     float lidarMinRange;
     float lidarMaxRange;
+
+    // Distortion Function
+    bool enable_distortion_function;
+    bool use_imu;
+    bool use_velocity;
 
     // IMU
     float imuAccNoise;
@@ -158,6 +164,8 @@ public:
         get_parameter("pointCloudTopic", pointCloudTopic);
         declare_parameter("imuTopic", "imu/data");
         get_parameter("imuTopic", imuTopic);
+        declare_parameter("twistTopic", "/twist");
+        get_parameter("twistTopic", twistTopic);
         declare_parameter("odomTopic", "lio_sam/odometry/imu");
         get_parameter("odomTopic", odomTopic);
         declare_parameter("gpsTopic", "lio_sam/odometry/gps");
@@ -219,6 +227,13 @@ public:
         get_parameter("lidarMinRange", lidarMinRange);
         declare_parameter("lidarMaxRange", 1000.0);
         get_parameter("lidarMaxRange", lidarMaxRange);
+
+        declare_parameter("enable_distortion_function", true);
+        get_parameter("enable_distortion_function", enable_distortion_function);
+        declare_parameter("use_imu", true);
+        get_parameter("use_imu", use_imu);
+        declare_parameter("use_velocity", true);
+        get_parameter("use_velocity", use_velocity);
 
         declare_parameter("imuAccNoise", 9e-4);
         get_parameter("imuAccNoise", imuAccNoise);
