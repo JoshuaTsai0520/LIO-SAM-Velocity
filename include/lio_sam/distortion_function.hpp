@@ -6,7 +6,6 @@
 #include <sophus/se3.hpp>
 
 #include <geometry_msgs/msg/twist_stamped.hpp>
-#include <geometry_msgs/msg/twist_with_covariance_stamped.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <sensor_msgs/point_cloud2_iterator.hpp>
@@ -40,7 +39,7 @@ public:
   virtual ~DistortionFunctionBase() = default;
 
   virtual void processTwistMessage(
-    const geometry_msgs::msg::TwistWithCovarianceStamped::ConstSharedPtr twist_msg) = 0;
+    const geometry_msgs::msg::TwistStamped::ConstSharedPtr twist_msg) = 0;
   virtual void processIMUMessage(
     const std::string & base_frame, const sensor_msgs::msg::Imu imu_msg, bool use_velocity) = 0;
   virtual void setPointCloudTransform(
@@ -69,7 +68,7 @@ public:
   {
   }
   void processTwistMessage(
-    const geometry_msgs::msg::TwistWithCovarianceStamped::ConstSharedPtr twist_msg) override;
+    const geometry_msgs::msg::TwistStamped::ConstSharedPtr twist_msg) override;
 
   void processIMUMessage(
     const std::string & base_frame, const sensor_msgs::msg::Imu imu_msg, bool use_velocity) override;

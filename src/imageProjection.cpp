@@ -2,7 +2,7 @@
 #include "lio_sam/msg/cloud_info.hpp"
 #include "lio_sam/distortion_function.hpp"
 
-#include <geometry_msgs/msg/twist_with_covariance_stamped.hpp>
+#include <geometry_msgs/msg/twist_stamped.hpp>
 
 struct VelodynePointXYZIRT
 {
@@ -57,7 +57,7 @@ private:
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr subImu;
     rclcpp::CallbackGroup::SharedPtr callbackGroupImu;
     std::deque<sensor_msgs::msg::Imu> imuQueue;
-    rclcpp::Subscription<geometry_msgs::msg::TwistWithCovarianceStamped>::SharedPtr subTwist;
+    rclcpp::Subscription<geometry_msgs::msg::TwistStamped>::SharedPtr subTwist;
 
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr subOdom;
     rclcpp::CallbackGroup::SharedPtr callbackGroupOdom;
@@ -122,7 +122,7 @@ public:
             imuTopic, qos_imu,
             std::bind(&ImageProjection::imuHandler, this, std::placeholders::_1),
             imuOpt);
-        subTwist = create_subscription<geometry_msgs::msg::TwistWithCovarianceStamped>(
+        subTwist = create_subscription<geometry_msgs::msg::TwistStamped>(
             twistTopic, qos_imu,
             std::bind(&ImageProjection::twistHandler, this, std::placeholders::_1),
             imuOpt);
@@ -224,7 +224,7 @@ public:
     }
 
     void twistHandler(
-        const geometry_msgs::msg::TwistWithCovarianceStamped::ConstSharedPtr twistMsg)
+        const geometry_msgs::msg::TwistStamped::ConstSharedPtr twistMsg)
     {
         if (enable_distortion_function && use_velocity) {
             initializeDistortionFunction();

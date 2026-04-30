@@ -2,11 +2,11 @@
 
 template <class T>
 void DistortionFunction<T>::processTwistMessage(
-  const geometry_msgs::msg::TwistWithCovarianceStamped::ConstSharedPtr twist_msg)
+  const geometry_msgs::msg::TwistStamped::ConstSharedPtr twist_msg)
 {
   geometry_msgs::msg::TwistStamped msg;
   msg.header = twist_msg->header;
-  msg.twist = twist_msg->twist.twist;
+  msg.twist = twist_msg->twist;
   twist_queue_.push_back(msg);
 
   while (!twist_queue_.empty()) {
